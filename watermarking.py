@@ -126,6 +126,12 @@ def extract_dct(original_bgr, compressed_bgr, wm_shape, alpha=20):
     return extracted_bits.reshape(wm_shape)
 
 
+def save_difference_map(original, watermarked, output_dir):
+    diff = cv2.absdiff(original, watermarked).astype(np.float32)
+    diff_amplified = np.clip(diff * 15, 0, 255).astype(np.uint8)
+    diff_gray = cv2.cvtColor(diff_amplified, cv2.COLOR_BGR2GRAY)
+    cv2.imwrite(os.path.join(output_dir, "difference_map.png"), diff_gray)
+
 # ─────────────────────────────────────────────
 # 5. METRICS
 # ─────────────────────────────────────────────
@@ -143,6 +149,51 @@ def normalized_correlation(original_wm, extracted_wm):
 def psnr(img1, img2):
     mse = np.mean((img1.astype(np.float32) - img2.astype(np.float32)) ** 2)
     return float('inf') if mse == 0 else 10 * np.log10(255.0 ** 2 / mse)
+
+
+def create_demo_face():
+    """Create a synthetic demo face (simple gradient + shapes)."""
+    img = np.zeros((256, 256, 3), dtype=np.uint8)
+    # Gradient background
+    for i in range(256):
+        img[i, :, 0] = i  # B
+        img[i, :, 1] = 255 - i  # G
+        img[i, :, 2] = 128  # R
+    # Simple face
+    cv2.circle(img, (128, 128), 80, (200, 200, 200), -1) # Face
+    cv2.circle(img, (100, 100), 10, (50, 50, 50), -1)   # Left eye
+    cv2.circle(img, (156, 100), 10, (50, 50, 50), -1)   # Right eye
+    cv2.ellipse(img, (128, 160), (40, 20), 0, 0, 180, (50, 50, 50), 2) # Smile
+    return img
+
+
+def _save_ycbcr_visuals(image, out_dir):
+    """
+    Saves the image in YCbCr color space and another version with 8x8 grids.
+    """
+    # Convert BGR to YCrCb (OpenCV's YCbCr)
+    ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+    
+    # 1. Save pure YCbCr conversion
+    # When saved via imwrite, it treats channels as BGR, giving a false-color visualization
+    ycbcr_output_path = os.path.join(out_dir, "ycbcr_converted.png")
+    cv2.imwrite(ycbcr_output_path, ycrcb)
+    
+    # 2. Save YCbCr with 8x8 grid
+    grid_img = ycrcb.copy()
+    h, w = grid_img.shape[:2]
+    
+    # Draw white grid lines (255, 255, 255)
+    # Since we are saving as BGR representation, this will result in white lines
+    color = (255, 255, 255)
+    for x in range(0, w, 8):
+        cv2.line(grid_img, (x, 0), (x, h), color, 1)
+    for y in range(0, h, 8):
+        cv2.line(grid_img, (0, y), (w, y), color, 1)
+        
+    grid_output_path = os.path.join(out_dir, "ycbcr_8x8_grid.png")
+    cv2.imwrite(grid_output_path, grid_img)
+    print(f"[INFO] YCbCr visuals saved to {out_dir}")
 
 
 # ─────────────────────────────────────────────
@@ -204,6 +255,8 @@ def evaluate(image_path, watermark_type="random", alpha=20, seed=42):
     cv2.imwrite(os.path.join(out_dir, "watermarked.png"), wm_image)
     cv2.imwrite(os.path.join(out_dir, "watermark.png"), (watermark * 255).astype(np.uint8))
 
+    _save_ycbcr_visuals(image, out_dir)
+
     for qf in [10, 30, 50, 70, 90]:
         comp = jpeg_compress(wm_image, quality=qf)
         cv2.imwrite(os.path.join(out_dir, f"compressed_qf{qf}.jpg"), comp)
@@ -254,33 +307,54 @@ def _save_plots(qf_list, ber_list, nc_list, out_dir):
 
 
 def _save_visual_summary(original, wm_image, watermark, wm_size, alpha, out_dir):
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    # We want to show QF 10, 20, 30, 40, 50, 60, 70, 80, 90, 100
+    qf_to_show = list(range(10, 101, 10))
+    num_qfs = len(qf_to_show)
+    
+    # 3 Rows: 
+    # Row 0: Original, Watermarked, Pattern, Difference (and empty space)
+    # Row 1: Compressed Images at 10 QFs
+    # Row 2: Extracted Watermarks at 10 QFs
+    fig, axes = plt.subplots(3, num_qfs, figsize=(20, 12))
 
     def bgr2rgb(img):
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+    # --- ROW 0: Main components ---
     axes[0, 0].imshow(bgr2rgb(original));      axes[0, 0].set_title("Original");             axes[0, 0].axis("off")
     axes[0, 1].imshow(bgr2rgb(wm_image));      axes[0, 1].set_title("Watermarked (DCT)");    axes[0, 1].axis("off")
     axes[0, 2].imshow(watermark, cmap="gray"); axes[0, 2].set_title("Watermark Pattern");    axes[0, 2].axis("off")
 
     diff = cv2.absdiff(wm_image, original).astype(np.float32)
     diff_vis = np.clip(diff * 15, 0, 255).astype(np.uint8)
-    axes[0, 3].imshow(bgr2rgb(diff_vis));      axes[0, 3].set_title("Difference x15\n(should look like noise)"); axes[0, 3].axis("off")
+    axes[0, 3].imshow(bgr2rgb(diff_vis));      axes[0, 3].set_title("Difference x15");       axes[0, 3].axis("off")
+    
+    # Turn off the rest of the axes in the first row
+    for j in range(4, num_qfs):
+        axes[0, j].axis("off")
 
-    for idx, qf in enumerate([10, 30, 70, 95]):
+    # --- ROW 1 & 2: Compressed and Extracted ---
+    for idx, qf in enumerate(qf_to_show):
         compressed = jpeg_compress(wm_image, quality=qf)
         extracted  = extract_dct(original, compressed, wm_size, alpha)
         ber        = bit_error_rate(watermark, extracted)
-        status = "Extractable" if ber < 0.15 else "Destroyed"
-        axes[1, idx].imshow(extracted, cmap="gray")
-        axes[1, idx].set_title(f"Extracted @ QF={qf}\nBER={ber:.3f}  [{status}]")
+        status = "OK" if ber < 0.15 else "Fail"
+        
+        # Row 1: Compressed Image
+        axes[1, idx].imshow(bgr2rgb(compressed))
+        axes[1, idx].set_title(f"Compressed\nQF={qf}")
         axes[1, idx].axis("off")
+        
+        # Row 2: Extracted Watermark
+        axes[2, idx].imshow(extracted, cmap="gray")
+        axes[2, idx].set_title(f"Extracted\nBER={ber:.3f} [{status}]")
+        axes[2, idx].axis("off")
 
-    plt.suptitle("DCT Watermarking - Invisibility & JPEG Robustness Evaluation", fontsize=13, fontweight="bold")
-    plt.tight_layout()
+    plt.suptitle("DCT Watermarking - Detailed JPEG Robustness (QF 10-100)", fontsize=16, fontweight="bold")
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(os.path.join(out_dir, "visual_summary.png"), dpi=150)
     plt.close()
-    print("[INFO] Visual summary saved.")
+    print("[INFO] Expanded visual summary saved.")
 
 
 
