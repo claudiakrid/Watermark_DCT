@@ -1,4 +1,5 @@
 # Penjelasan Kode Watermarking DCT
+**Untuk penjelasan yang lebih lengkap, termasuk penjelasan kodenya terdapat pada file PDF atau DOCS berjudul "Penjelasan_18224032_Claudia Melati Krid"**
 **Claudia Melati Krid - 18224032**
 
 ## Teknik Watermarking
@@ -50,25 +51,31 @@ Lalu, koefisien DCT akan dimodifikasi dengan menambahhkan alpha. Terakhir, pada 
 
 Berikut gambaran perbedaan pixel antara gambar yang sudah diberi watermark dengan gambar original:
 
-![Difference Map](watermark_output/difference_map.png)
+![Difference Map](watermark_output/Difference_Map.png)
 *Difference map → pada gambar ini, selisih diperkuat x15 supaya selisih piksel terlihat lebih jelas. Untuk yang berwarna putih (lebih terang) berarti perbedaan piksel pada area tersebut lebih besar. Sedangkan untuk yang berwarna hitam, artinya perubahan kecil.*
 
 ### 4. JPEG Compression
 Fungsi `jpeg_compress` berperan untuk mengkompres JPEG dengan Quality Factor (QF) tertentu, yaitu pada QF=10 hingga QF=100 dengan interval 5. Jika QF kecil, maka kompresi menguat dan kualitas akan menurun. Sedangkan jika QF besar, maka kompresi akan ringan dan kualitas output akan lebih bagus. Berikut perbandingan hasil kompresi gambar di berbagai QF.
 
+![Compressed All Picture](watermark_output/compressed_allpicture.png)
+
 ### 5. Ekstraksi Watermark
 Pada bagian ini, watermark diekstrak dengan membandingkan koefisien DCT gambar terkompresi terhadap gambar asli sebagai referensi. Berikut hasil ekstraksi watermark untuk rentang QF 10 hingga 100 (interval 10), dan dapat dilihat bahwa pada QF yang rendah (berarti kompresi menguat), watermark tidak dapat diekstraksi secara sempurna.
+
+![DCT Extract All](watermark_output/dct_extract_all.png)
 
 ---
 
 ## Evaluasi Kinerja Watermark
 Saya mengubah Quality Factor (QF) menjadi beberapa nilai dari rentang QF=10 hingga QF=100 dengan interval 5 dan menghasilkan output berikut.
 
+![Output Terminal](watermark_output/output_terminal.png)
+
 Dapat dilihat bahwa watermark dapat diekstrak mulai dari **QF 55 hingga 100**. Sedangkan untuk **QF<= 50** tidak dapat diekstrak. Outputnya, untuk QF >= 55, watermark akan terlihat halus sedangkan jika QF <= 50, gambar akan terlihat buram. Contohnya dapat dilihat pada gambar di bawah ini (gambar saya zoom supaya perbedaan terlihat lebih jelas):
 
 | QF 30 (tidak extractable) | QF 70 (extractable) |
 |:---:|:---:|
-| (Lihat visual_summary.png pada kolom QF 30) | (Lihat visual_summary.png pada kolom QF 70) |
+| ![Compressed QF30](watermark_output/compressed_qf30.jpg) <br> ![Extracted QF30](watermark_output/dct_extract_30.png) | ![Compressed QF70](watermark_output/compressed_qf70.jpg) <br> ![Extracted QF70](watermark_output/dct_extract_70.png) |
 
 ### Visual Summary
 Rangkuman perbandingan kompresi foto dan ekstrasi watermark di berbagai QF:
@@ -80,6 +87,6 @@ Pada perbandingan hasil ekstraksi watermark pada berbagai level QF, dapat terlih
 Di sisi lain, pada QF >=55 (misalnya pada QF = 70 dan QF = 95 yang memiliki label extractable), watermark dapat diekstraksi sepenuhnya karena di QF yang tinggi, nilai table kuantisasinya kecil sehingga hampir tidak ada koefisien yang dibuang.
 
 ### Grafik Quality Factor
-Pada grafik kiri (BER), Bit Error Rate tinggi di QF yang rendah dan turun drastis setelah QF >= 55 (sesuai dengan evaluasi kinerja watermark dan visual summary sebelumnya). Sedangkan pada grafik yang kanan (NC), Normalized Correlation naik signifikan setelah QF >= 55 yang berarti kesamaan antara watermark asli dengan yang diekstrak berhasil diverifikasi ketika QF lebih dari 55.
+Pada grafik kiri (BER), Bit Error Rate tinggi di QF yang rendah and turun drastis setelah QF >= 55 (sesuai dengan evaluasi kinerja watermark dan visual summary sebelumnya). Sedangkan pada grafik yang kanan (NC), Normalized Correlation naik signifikan setelah QF >= 55 yang berarti kesamaan antara watermark asli dengan yang diekstrak berhasil diverifikasi ketika QF lebih dari 55.
 
 ![Robustness Plot](watermark_output/robustness_plot.png)
